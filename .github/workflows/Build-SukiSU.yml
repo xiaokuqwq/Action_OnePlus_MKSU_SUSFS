@@ -82,6 +82,10 @@ on:
         options:
           - gki
           - perf
+      CUSTOM_SUFFIX:
+        description: "请输入你想替换的内核后缀（例如：-我是毒液）"
+        required: true
+        default: "-我是奶龙"
       SUSFS_CI:
         type: boolean
         description: "下载SUSFS模块是否使用CI构建？"
@@ -162,16 +166,17 @@ jobs:
           rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
           rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
 
-      # 删除 -dirty 后缀
-      - name: Force remove -dirty suffix
-        run: |
-          cd kernel_workspace/kernel_platform
-          sed -i 's/ -dirty//g' common/scripts/setlocalversion
-          sed -i 's/ -dirty//g' msm-kernel/scripts/setlocalversion
-          sed -i 's/ -dirty//g' external/dtc/scripts/setlocalversion
-          sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' common/scripts/setlocalversion
-          git add -A
-          git commit -m "Force remove -dirty suffix from kernel version"
+      # 更改 -dirty 后缀
+- name: Replace dirty suffix with custom one
+    run: |
+      cd kernel_workspace/kernel_platform
+      CUSTOM_SUFFIX="${{ github.event.inputs.custom_suffix }}"
+      for f in common/scripts/setlocalversion msm-kernel/scripts/setlocalversion external/dtc/scripts/setlocalversion; do
+        sed -i "s/ -dirty/${CUSTOM_SUFFIX}/g" "$f"
+      done
+      sed -i "\$i res=$(echo \"$res\" | sed 's/-dirty/${CUSTOM_SUFFIX}/g')" common/scripts/setlocalversion
+      git add -A
+      git commit -m "Replace -dirty with ${CUSTOM_SUFFIX} in kernel version"
 
       # 添加 SukiSU Ultra
       - name: Add KernelSU-SukiSU Ultra
