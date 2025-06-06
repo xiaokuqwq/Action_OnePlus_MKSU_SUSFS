@@ -166,16 +166,17 @@ jobs:
           rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
           rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
 
-- name: Replace dirty suffix with custom one
-    run: |
-      cd kernel_workspace/kernel_platform
-      CUSTOM_SUFFIX="${{ github.event.inputs.custom_suffix }}"
-      for f in common/scripts/setlocalversion msm-kernel/scripts/setlocalversion external/dtc/scripts/setlocalversion; do
+      # 更改 -dirty 后缀
+      - name: Replace dirty suffix with custom one
+        run: |
+         cd kernel_workspace/kernel_platform
+         CUSTOM_SUFFIX="${{ github.event.inputs.custom_suffix }}"
+         for f in common/scripts/setlocalversion msm-kernel/scripts/setlocalversion external/dtc/scripts/setlocalversion; do
         sed -i "s/ -dirty/${CUSTOM_SUFFIX}/g" "$f"
-      done
-      echo 'res=$(echo "$res" | sed "s/-dirty/${CUSTOM_SUFFIX}/g")' >> common/scripts/setlocalversion
-      git add -A
-      git commit -m "Replace -dirty with ${CUSTOM_SUFFIX} in kernel version"
+         done
+         sed -i "\$i res=$(echo \"$res\" | sed 's/-dirty/${CUSTOM_SUFFIX}/g')" common/scripts/setlocalversion
+         git add -A
+         git commit -m "Replace -dirty with ${CUSTOM_SUFFIX} in kernel version"
 
       # 添加 SukiSU Ultra
       - name: Add KernelSU-SukiSU Ultra
