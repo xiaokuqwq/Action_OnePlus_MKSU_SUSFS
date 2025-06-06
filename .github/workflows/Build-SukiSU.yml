@@ -86,26 +86,20 @@ on:
         description: "请输入你想替换的内核后缀（例如：-我是毒液）"
         required: true
         default: "-我是奶龙"
-      SUSFS_CI:
-        type: boolean
-        description: "下载SUSFS模块是否使用CI构建？"
+      # 合并所有布尔值选项为一个字符串输入
+      BUILD_OPTIONS:
+        description: "构建选项 (逗号分隔): susfs_ci,vfs,kpm,zram"
         required: true
-        default: true
-      VFS:
-        type: boolean
-        description: "是否启用手动钩子？"
+        default: "susfs_ci,vfs,kmp"
+        type: string
+      SUSFS_SOURCE:
+        type: choice
+        description: "SUSFS模块来源"
         required: true
-        default: true
-      KPM:
-        type: boolean
-        description: "是否启用KPM？"
-        required: true
-        default: true
-      ZRAM:
-        type: boolean
-        description: "是否启用添加更多的ZRAM算法？"
-        required: true
-        default: false
+        default: "ci"
+        options:
+          - "ci"
+          - "release"
 
 jobs:
   build:
@@ -133,6 +127,20 @@ jobs:
           sudo apt update && sudo apt upgrade -y
           sudo apt install -y python3 git curl
 
+      # 解析构建选项
+      - name: Parse build options
+        run: |
+          echo "BUILD_SUSFS_CI=${{ contains(inputs.BUILD_OPTIONS, 'susfs_ci') }}" >> $GITHUB_ENV
+          echo "BUILD_VFS=${{ contains(inputs.BUILD_OPTIONS, 'vfs') }}" >> $GITHUB_ENV
+          echo "BUILD_KPM=${{ contains(inputs.BUILD_OPTIONS, 'kpm') }}" >> $GITHUB_ENV
+          echo "BUILD_ZRAM=${{ contains(inputs.BUILD_OPTIONS, 'zram') }}" >> $GITHUB_ENV
+          
+          # 为了兼容性，也设置原来的变量名
+          echo "SUSFS_CI=${{ contains(inputs.BUILD_OPTIONS, 'susfs_ci') }}" >> $GITHUB_ENV
+          echo "VFS=${{ contains(inputs.BUILD_OPTIONS, 'vfs') }}" >> $GITHUB_ENV
+          echo "KPM=${{ contains(inputs.BUILD_OPTIONS, 'kpm') }}" >> $GITHUB_ENV
+          echo "ZRAM=${{ contains(inputs.BUILD_OPTIONS, 'zram') }}" >> $GITHUB_ENV
+
       - name: Show selected inputs debug
         run: |
           echo "Selected CPU: ${{ github.event.inputs.CPU }}"
@@ -141,10 +149,11 @@ jobs:
           echo "Selected ANDROID_VERSION: ${{ github.event.inputs.ANDROID_VERSION }}"
           echo "Selected KERNEL_VERSION: ${{ github.event.inputs.KERNEL_VERSION }}"
           echo "Selected BUILD_METHOD: ${{ github.event.inputs.BUILD_METHOD }}"
-          echo "Selected SUSFS_CI: ${{ github.event.inputs.SUSFS_CI }}"
-          echo "Selected ZRAM: ${{ github.event.inputs.ZRAM }}"
-          echo "Selected VFS: ${{ github.event.inputs.VFS }}"
-          echo "Selected KPM: ${{ github.event.inputs.KPM }}"
+          echo "Selected BUILD_OPTIONS: ${{ github.event.inputs.BUILD_OPTIONS }}"
+          echo "Parsed SUSFS_CI: ${{ env.SUSFS_CI }}"
+          echo "Parsed VFS: ${{ env.VFS }}"
+          echo "Parsed KPM: ${{ env.KPM }}"
+          echo "Parsed ZRAM: ${{ env.ZRAM }}"
 
       - name: Install repo tool
         run: |
@@ -200,7 +209,7 @@ jobs:
           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 
-          if [ "${{ github.event.inputs.ZRAM }}" = "true" ]; then
+          if [ "${{ env.ZRAM }}" = "true" ]; then
           echo "正在给内核打zram补丁"
           cp -r ../SukiSU_patch/other/zram/lz4k/include/linux/* ./common/include/linux
           cp -r ../SukiSU_patch/other/zram/lz4k/lib/* ./common/lib
@@ -222,7 +231,7 @@ jobs:
       - name: Apply VFS
         run: |
           cd kernel_workspace/kernel_platform/common
-          if [ "${{ github.event.inputs.VFS }}" = "true" ]; then
+          if [ "${{ env.VFS }}" = "true" ]; then
           cp ../../SukiSU_patch/hooks/syscall_hooks.patch ./
           echo "正在打vfs补丁"
           patch -p1 -F 3 < syscall_hooks.patch
@@ -232,7 +241,7 @@ jobs:
       - name: Apply LZ4KD
         run: |
           cd kernel_workspace/kernel_platform/common
-          if [ "${{ github.event.inputs.ZRAM }}" = "true" ]; then
+          if [ "${{ env.ZRAM }}" = "true" ]; then
             cp ../../SukiSU_patch/other/zram/zram_patch/${{ github.event.inputs.KERNEL_VERSION }}/lz4kd.patch ./
             echo "正在打lz4kd补丁"
             patch -p1 -F 3 < lz4kd.patch || true
@@ -249,21 +258,21 @@ jobs:
           # SukiSU Ultra config
           echo "CONFIG_KSU=y" >> "$CONFIG_FILE"
           echo "CONFIG_KPM=y" >> "$CONFIG_FILE"
-          if [ "${{ github.event.inputs.VFS }}" = "false" ]; then
+          if [ "${{ env.VFS }}" = "false" ]; then
           echo "CONFIG_KPROBES=y" >> "$CONFIG_FILE"
           fi
           # VFS config
-          if [ "${{ github.event.inputs.VFS }}" = "true" ]; then
+          if [ "${{ env.VFS }}" = "true" ]; then
             echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> "$CONFIG_FILE"
             echo "CONFIG_KSU_MANUAL_HOOK=y" >> "$CONFIG_FILE"
           fi
 
-          if [ "${{ github.event.inputs.VFS }}" = "false" ]; then
+          if [ "${{ env.VFS }}" = "false" ]; then
             echo "CONFIG_KSU_SUSFS_SUS_SU=y" >> "$CONFIG_FILE"
           fi
 
           # SUSFS config
-          if [ "${{ github.event.inputs.VFS }}" = "true" ]; then
+          if [ "${{ env.VFS }}" = "true" ]; then
           echo "CONFIG_KSU_SUSFS=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> "$CONFIG_FILE"
           echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> "$CONFIG_FILE"
@@ -285,7 +294,7 @@ jobs:
           sed -i 's/check_defconfig//' ./common/build.config.gki
 
           # LZ4KD配置
-          if [ "${{ github.event.inputs.ZRAM }}" = "true" ]; then
+          if [ "${{ env.ZRAM }}" = "true" ]; then
           CONFIG_FILE=./common/arch/arm64/configs/gki_defconfig
 
             if [ "${{ github.event.inputs.KERNEL_VERSION }}" = "5.10" ]; then
@@ -407,7 +416,7 @@ jobs:
           fi
 
       - name: Apply patch_linux and replace Image
-        if: ${{ github.event.inputs.KPM == 'true' }}
+        if: ${{ env.KPM == 'true' }}
         run: |
           cd /home/runner/work/Action_OnePlus_MKSU_SUSFS/Action_OnePlus_MKSU_SUSFS/kernel_workspace/kernel_platform/out/msm-kernel-${{ github.event.inputs.CPUD }}-${{ github.event.inputs.BUILD_METHOD }}/dist
           curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.11-beta/patch_linux
@@ -419,7 +428,7 @@ jobs:
 
       # 下载 SUSFS 模块（CI）
       - name: Download Latest SUSFS Module from CI
-        if: ${{ github.event.inputs.SUSFS_CI == 'true' }}
+        if: ${{ inputs.SUSFS_SOURCE == 'ci' }}
         run: |
           LATEST_RUN_ID=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/sidex15/susfs4ksu-module/actions/runs?status=success" | \
@@ -438,7 +447,7 @@ jobs:
 
       # 下载 SUSFS 模块（Release）
       - name: Download Latest SUSFS Module from Release
-        if: ${{ github.event.inputs.SUSFS_CI == 'false' }}
+        if: ${{ inputs.SUSFS_SOURCE == 'release' }}
         run: |
           wget https://github.com/sidex15/ksu_module_susfs/releases/latest/download/ksu_module_susfs_1.5.2+.zip
           cp ksu_module_susfs_1.5.2+.zip ./AnyKernel3/
@@ -446,7 +455,7 @@ jobs:
       - name: Set suffix
         id: suffix
         run: |
-          echo "value=${{ github.event.inputs.KPM == 'true' && '_KPM' || '' }}${{ github.event.inputs.VFS == 'true' && '_VFS' || '' }}${{ github.event.inputs.ZRAM == 'true' && '_LZ4KD' || '' }}" >> $GITHUB_OUTPUT
+          echo "value=${{ env.KPM == 'true' && '_KPM' || '' }}${{ env.VFS == 'true' && '_VFS' || '' }}${{ env.ZRAM == 'true' && '_LZ4KD' || '' }}" >> $GITHUB_OUTPUT
 
       - name: Remove _uv suffix from FEIL
         id: feil_clean
