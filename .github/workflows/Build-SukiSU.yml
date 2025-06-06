@@ -80,7 +80,7 @@ on:
         required: true
         default: gki
         options:
-          - gki
+          - oki
           - perf
       CUSTOM_SUFFIX:
         description: "请输入你想替换的内核后缀（例如：-我是毒液）"
